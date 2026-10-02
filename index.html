@@ -1,4 +1,4 @@
-<!doctype html>
+<!doctype html><!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b2a74"><title>Perfect Riders Sales Share</title>
 <style>
@@ -21,6 +21,170 @@ async function getCatalog(){
  if(!r.ok)throw new Error(d.error||'Could not load products'); CATALOG=d.items||[]; return CATALOG;
 }
 function productByKey(k){return CATALOG.find(x=>x.model_key===k)}
+function docsFor(p){return [
+ {key:'brochure',label:'Product Brochure',url:p?.brochure_url},
+ {key:'price_list',label:'Price List',url:p?.price_list_url},
+ {key:'quotation',label:'Quotation',url:p?.quotation_url}
+]}
+function customerProductPage(p){
+ document.getElementById('adminLink').style.display='none';
+ const docs=docsFor(p).filter(x=>x.url);
+ let buttons=docs.map((d,i)=>'<a class="btn '+(i===0?'primary':'')+'" target="_blank" rel="noopener" href="'+esc(d.url)+'">'+esc(d.label)+'</a>').join('');
+ let viewer=p.brochure_url?'<div class="pdfbox"><iframe class="pdfview" src="'+esc(p.brochure_url)+'#view=FitH" title="'+esc(p.product_name)+' brochure"></iframe></div>':'<div class="notice">Brochure has not been uploaded yet.</div>';
+ document.getElementById('app').innerHTML='<a class="btn" href="./">← Back</a><div class="hero productcard"><span class="eyebrow">PERFECT RIDERS PRODUCT GUIDE</span><h2>'+esc(p.product_name)+'</h2><p>Product documents shared by your Perfect Riders Yamaha sales executive.</p></div><div class="card"><span class="pill">DOCUMENTS</span><div class="btnrow">'+buttons+'</div><p class="small">For the clearest brochure view, tap <b>Product Brochure</b> to open the PDF full screen.</p></div>'+viewer+'<div class="card"><h3>Visit Perfect Riders</h3><a class="btn primary" target="_blank" href="'+SHOWROOM+'">Showroom Locations</a></div>';
+}
+function main(){
+ const active=CATALOG.filter(x=>x.active);
+ let opts='<option value="">Select Yamaha model</option>', libs='';
+ active.forEach(p=>{opts+='<option value="'+esc(p.model_key)+'">'+esc(p.product_name)+'</option>';libs+='<a target="_blank" href="?product='+encodeURIComponent(p.model_key)+'"><b>'+esc(p.product_name)+'</b><span>View documents →</span></a>'});
+ document.getElementById('app').innerHTML='<div class="hero"><span class="eyebrow">SALES EXECUTIVE • OWN WHATSAPP</span><h2>Send product, price and quotation details in seconds.</h2><p>Select the customer and product, then choose which documents to include in the WhatsApp message.</p></div><div class="tabs"><button class="tab on" data-t="send">Send</button><button class="tab" data-t="history">History</button><button class="tab" data-t="library">Product Library</button></div><section id="send" class="panel on"><div class="card"><h3>Customer Details</h3><div class="grid"><div><label>Executive Name *</label><input id="executive" placeholder="e.g. Ranjitha"></div><div><label>Branch *</label><select id="branch"><option value="">Select branch</option><option>Lalbagh</option><option>Jayanagar</option></select></div></div><div class="grid"><div><label>Customer Name *</label><input id="customer" placeholder="Customer name"></div><div><label>WhatsApp Number *</label><div class="phone"><span>+91</span><input id="phone" maxlength="10" inputmode="numeric" placeholder="10-digit mobile"></div></div></div><label>Interested Model *</label><select id="model">'+opts+'</select><label>Preferred Colour *</label><select id="colourChoice" disabled><option value="">Select model first</option></select><p class="small" id="colourHelp">Choose the customer&#39;s preferred colour. The quotation will be generated only for this colour.</p><label>Documents to Send</label><div class="docopts"><div class="docopt" id="doc-brochure"><label><input type="checkbox" id="sendBrochure" checked> Product Brochure</label></div><div class="docopt" id="doc-price"><label><input type="checkbox" id="sendPrice"> Price List</label></div><div class="docopt" id="doc-quote"><label><input type="checkbox" id="sendQuote"> Quotation</label></div></div><p class="small" id="docHelp">Select a model to see available documents.</p><label>Optional Note</label><textarea id="note" rows="3" maxlength="180" placeholder="e.g. Interested in finance / test ride Saturday"></textarea><div id="preview" class="preview">Enter customer details to preview the WhatsApp message.</div><button id="go" class="send">Open WhatsApp & Send</button><p class="small">WhatsApp opens on this phone. The executive taps Send, so the message comes from their own number.</p></div></section><section id="history" class="panel"><div class="card"><h3>Customer History</h3><div id="historyList"></div><button id="clear" class="tab">Clear device history</button></div></section><section id="library" class="panel"><div class="card"><h3>Product Library</h3><div class="lib">'+libs+'</div></div></section>';bindSales();
+}
+function bindSales(){
+ const q=id=>document.getElementById(id); const clean=v=>String(v||'').replace(/\D/g,'');
+ function selectedProduct(){return productByKey(q('model').value)}
+ const optionCache={};
+ function selectedOption(){const p=selectedProduct(),v=q('colourChoice')?.value||'';if(!p||v==='')return null;return (optionCache[p.model_key]||[])[Number(v)]||null}
+ async function loadColours(){
+  const p=selectedProduct(),sel=q('colourChoice');if(!sel)return;
+  if(!p){sel.disabled=true;sel.innerHTML='<option value="">Select model first</option>';q('colourHelp').textContent="Choose the customer&#39;s preferred colour. The quotation will be generated only for this colour.";pre();return}
+  sel.disabled=true;sel.innerHTML='<option value="">Loading colours…</option>';
+  try{
+   if(!optionCache[p.model_key]){const r=await fetch(OPTIONS_API+'?model='+encodeURIComponent(p.model_key),{cache:'no-store'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load colours');optionCache[p.model_key]=d.items||[]}
+   const items=optionCache[p.model_key]||[];
+   sel.innerHTML='<option value="">Select preferred colour</option>'+items.map((x,i)=>'<option value="'+i+'">'+esc(x.colour||'Standard')+(x.variant?' — '+esc(x.variant):'')+'</option>').join('');
+   sel.disabled=!items.length;
+   q('colourHelp').textContent=items.length?'Quotation will include only the selected colour and matching variant.':'No colour/price mapping found for this model.';
+  }catch(e){sel.innerHTML='<option value="">Unable to load colours</option>';q('colourHelp').textContent=e.message||String(e)}
+  pre();
+ }
+ function quotationUrl(){const p=selectedProduct(),o=selectedOption();if(!p?.quotation_url)return '';if(!o)return p.quotation_url;return p.quotation_url+'&row='+encodeURIComponent(o.row_order)+'&colour='+encodeURIComponent(o.colour||'')}
+ function syncDocs(){
+  const p=selectedProduct();
+  const avail={brochure:!!p?.brochure_url,price:!!p?.price_list_url,quote:!!p?.quotation_url};
+  [['brochure','sendBrochure'],['price','sendPrice'],['quote','sendQuote']].forEach(([k,id])=>{const el=q(id);el.disabled=!avail[k];document.getElementById('doc-'+k).classList.toggle('off',!avail[k]);if(!avail[k])el.checked=false});
+  if(p&&avail.brochure)q('sendBrochure').checked=true;
+  q('docHelp').textContent=!p?'Select a model to see available documents.':(!avail.price&&!avail.quote?'Brochure available. Price list/quotation can be added by Admin.':'Choose any available documents to send.');
+  pre();
+ }
+ function msg(){
+  const p=selectedProduct(); if(!p)return '';
+  const e=q('executive').value.trim(),c=q('customer').value.trim(),b=q('branch').value,n=q('note').value.trim();
+  let lines=['Hi '+(c||'there')+' 👋','','Thank you for your interest in the Yamaha '+p.product_name+' at Perfect Riders Yamaha.','','I am '+(e||'your sales executive')+(b?' from our '+b+' branch':'')+'.','','Here are the details we discussed:'];
+  if(q('sendBrochure').checked&&p.brochure_url)lines.push('Product Brochure: '+p.brochure_url);
+  if(q('sendPrice').checked&&p.price_list_url)lines.push('Price List: '+p.price_list_url);
+  const opt=selectedOption();if(opt?.colour)lines.push('Selected Colour: '+opt.colour+(opt.variant?' ('+opt.variant+')':''));
+  if(q('sendQuote').checked&&p.quotation_url)lines.push('Quotation: '+quotationUrl());
+  if(n && !['no','na','n/a','none','nil'].includes(n.toLowerCase()))lines.push('','Note: '+n);
+  lines.push('','To visit the showroom kindly click on '+SHOWROOM,'','Please feel free to message or call me for finance options or a test ride.\n\nIf I am uncontactable, please call Perfect Riders on 8497016000 for more details.');
+  return lines.join('\n');
+ }
+ function pre(){q('preview').textContent=msg()||'Enter customer details to preview the WhatsApp message.'}
+ ['executive','branch','customer','phone','model','note','sendBrochure','sendPrice','sendQuote','colourChoice'].forEach(id=>{q(id).addEventListener('input',id==='model'?syncDocs:pre);q(id).addEventListener('change',id==='model'?syncDocs:pre)});q('model').addEventListener('change',loadColours);
+ q('executive').value=localStorage.getItem('pr_exec')||'';q('branch').value=localStorage.getItem('pr_branch')||'';syncDocs();loadColours();
+ document.querySelectorAll('.tab[data-t]').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab[data-t]').forEach(x=>x.classList.remove('on'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));b.classList.add('on');q(b.dataset.t).classList.add('on');if(b.dataset.t==='history')hist()});
+ function hist(){const a=JSON.parse(localStorage.getItem('pr_hist')||'[]');q('historyList').innerHTML=a.length?a.map(x=>'<div class="hist"><b>'+esc(x.customer)+' • '+esc(x.model)+'</b><br><small>+91 '+esc(x.phone)+' • '+esc(x.branch)+' • '+new Date(x.at).toLocaleString()+'</small><div class="btnrow">'+(x.brochure_url?'<a class="btn" target="_blank" href="'+esc(x.brochure_url)+'">Brochure</a>':'')+(x.price_list_url?'<a class="btn" target="_blank" href="'+esc(x.price_list_url)+'">Price List</a>':'')+(x.quotation_url?'<a class="btn" target="_blank" href="'+esc(x.quotation_url)+'">Quotation</a>':'')+'</div></div>').join(''):'<p class="small">No sends recorded on this device yet.</p>'}
+ q('clear').onclick=()=>{if(confirm('Clear history on this device?')){localStorage.removeItem('pr_hist');hist()}};
+ q('go').onclick=()=>{const e=q('executive').value.trim(),b=q('branch').value,c=q('customer').value.trim(),pnum=clean(q('phone').value),p=selectedProduct(),opt=selectedOption(),qurl=quotationUrl();if(!e||!b||!c||pnum.length!==10||!p){alert('Please complete all required fields and enter a valid 10-digit mobile number.');return}if(q('sendQuote').checked&&!opt){alert('Please select the customer preferred colour before sending the quotation.');return}if(!q('sendBrochure').checked&&!q('sendPrice').checked&&!q('sendQuote').checked){alert('Select at least one document to send.');return}localStorage.setItem('pr_exec',e);localStorage.setItem('pr_branch',b);const a=JSON.parse(localStorage.getItem('pr_hist')||'[]');a.unshift({at:new Date().toISOString(),customer:c,phone:pnum,branch:b,model:p.product_name+(opt?.colour?' • '+opt.colour:''),brochure_url:q('sendBrochure').checked?p.brochure_url:'',price_list_url:q('sendPrice').checked?p.price_list_url:'',quotation_url:q('sendQuote').checked?qurl:''});localStorage.setItem('pr_hist',JSON.stringify(a.slice(0,300)));fetch(LOG_API,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({executive_name:e,branch:b,customer_name:c,phone:pnum,model_key:p.model_key,model_name:p.product_name,note:q('note').value.trim(),brochure_shared:q('sendBrochure').checked,price_list_shared:q('sendPrice').checked,quotation_shared:q('sendQuote').checked,quotation_url_sent:q('sendQuote').checked?qurl:'',selected_colour:opt?.colour||'',selected_variant:opt?.variant||'',selected_code:opt?.code||''})}).catch(()=>{});location.href='https://wa.me/91'+pnum+'?text='+encodeURIComponent(msg())};
+}
+function adminLogin(){
+ document.getElementById('adminLink').style.display='none';
+ const token=localStorage.getItem('pr_admin_token'); if(token){adminDashboard(token);return}
+ document.getElementById('app').innerHTML='<div class="login"><div class="hero"><span class="eyebrow">ADMIN DASHBOARD</span><h2>Product & Document Management</h2><p>Use the existing Perfect Riders Admin login.</p></div><div class="card"><label>Username</label><input id="au" autocomplete="username"><label>Password</label><input id="ap" type="password" autocomplete="current-password"><button class="send" id="alogin">Login as Admin</button><p class="small" id="aerr"></p></div></div>';
+ document.getElementById('alogin').onclick=async()=>{const u=document.getElementById('au').value.trim(),p=document.getElementById('ap').value;document.getElementById('aerr').textContent='Signing in…';try{const r=await fetch(LOGIN_API,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Login failed');if(d.user?.role!=='Admin')throw new Error('Admin access required');localStorage.setItem('pr_admin_token',d.token);adminDashboard(d.token)}catch(e){document.getElementById('aerr').textContent=e.message||String(e)}}
+}
+async function adminDashboard(token){
+ document.getElementById('adminLink').style.display='none';
+ try{await getCatalog()}catch(e){document.getElementById('app').innerHTML='<div class="notice">'+esc(e.message)+'</div>';return}
+ document.getElementById('app').innerHTML='<div class="hero"><span class="eyebrow">ADMIN DASHBOARD</span><h2>Sales Sharing & Product Management</h2><p>Track customer shares and manage brochures, price lists and quotations from one place.</p></div><div class="card adminbar"><div><b>Perfect Riders Sales Dashboard</b><div class="small">Customer sharing activity + central product library.</div></div><div><button class="btn" id="refreshAdmin">Refresh</button> <button class="btn danger" id="logoutAdmin">Logout</button></div></div><div class="card"><h3>WhatsApp Sharing Dashboard</h3><div class="filters"><div><label>From</label><input type="date" id="shareFrom"></div><div><label>To</label><input type="date" id="shareTo"></div><div><label>Executive</label><select id="shareExec"><option value="">All executives</option></select></div><div><label>Branch</label><select id="shareBranch"><option value="">All branches</option><option>Lalbagh</option><option>Jayanagar</option></select></div><button class="btn primary" id="applyShares">Apply</button></div><div id="shareStats" class="stats"><div class="stat"><span>WhatsApp Shares</span><b>-</b></div><div class="stat"><span>Brochures</span><b>-</b></div><div class="stat"><span>Price Lists</span><b>-</b></div><div class="stat"><span>Quotations</span><b>-</b></div><div class="stat"><span>Unique Customers</span><b>-</b></div></div><div id="shareTable" class="small">Loading sharing activity…</div><p class="small">Time shown is when the executive tapped <b>Open WhatsApp & Send</b>. With executive-owned WhatsApp, the app cannot technically verify the final WhatsApp Send tap.</p></div><div class="card"><h3>Bulk Price List Upload</h3><p class="small">Upload the master Excel. Motorcycles will read only <b>ins with nil dip only MC</b>; scooters will read only <b>ins with nil dep sc</b>. Individual model-wise portrait price lists are refreshed automatically.</p><div class="grid"><div class="uploadbox"><b>Motorcycle Price Master</b><input type="file" accept=".xlsx,.xls" id="bulkMcFile"><button class="btn primary" id="bulkMcBtn">Upload Motorcycle Excel</button><div class="small" id="bulkMcStatus"></div></div><div class="uploadbox"><b>Scooter Price Master</b><input type="file" accept=".xlsx,.xls" id="bulkScFile"><button class="btn primary" id="bulkScBtn">Upload Scooter Excel</button><div class="small" id="bulkScStatus"></div></div></div></div><div class="card"><h3>Add New Product</h3><div class="grid3"><div><label>Model Key</label><input id="newKey" placeholder="e.g. xmax"></div><div><label>Product Name</label><input id="newName" placeholder="e.g. XMAX 300"></div><div><label>Sort Order</label><input id="newSort" type="number" value="110"></div></div><button class="btn primary" id="addProduct">Add Product</button></div><div id="productAdmin"></div>';
+ renderAdminProducts(token);
+ initShareAnalytics(token);
+ initBulkPriceUpload(token);
+ document.getElementById('logoutAdmin').onclick=()=>{localStorage.removeItem('pr_admin_token');location.reload()};
+ document.getElementById('refreshAdmin').onclick=()=>adminDashboard(token);
+ document.getElementById('addProduct').onclick=async()=>{const k=document.getElementById('newKey').value.trim(),n=document.getElementById('newName').value.trim(),s=Number(document.getElementById('newSort').value||100);if(!k||!n){alert('Enter model key and product name.');return}await adminSave(token,{model_key:k,product_name:n,sort_order:s,active:true});await adminDashboard(token)};
+}
+function renderAdminProducts(token){
+ const root=document.getElementById('productAdmin');
+ root.innerHTML=CATALOG.map((p,i)=>'<div class="prodrow" data-key="'+esc(p.model_key)+'"><div class="prodhead"><div><b>'+esc(p.product_name)+'</b><div class="small">'+esc(p.model_key)+'</div></div><span class="status '+(p.active?'':'off')+'">'+(p.active?'ACTIVE':'INACTIVE')+'</span></div><div class="grid3"><div><label>Product Name</label><input class="pname" value="'+esc(p.product_name)+'"></div><div><label>Sort Order</label><input class="psort" type="number" value="'+Number(p.sort_order||100)+'"></div><div><label>Status</label><select class="pactive"><option value="1" '+(p.active?'selected':'')+'>Active</option><option value="0" '+(!p.active?'selected':'')+'>Inactive</option></select></div></div><div class="grid3"><div class="uploadbox"><b>Brochure PDF</b><input type="file" accept="application/pdf" class="fbrochure"><div class="docstate '+(p.brochure_url?'ok':'missing')+'">'+(p.brochure_url?'Uploaded':'Not uploaded')+'</div>'+(p.brochure_url?'<a target="_blank" href="'+esc(p.brochure_url)+'">Open current</a>':'')+'</div><div class="uploadbox"><b>Price List PDF</b><input type="file" accept="application/pdf" class="fprice"><div class="docstate '+(p.price_list_url?'ok':'missing')+'">'+(p.price_list_url?'Uploaded':'Not uploaded')+'</div>'+(p.price_list_url?'<a target="_blank" href="'+esc(p.price_list_url)+'">Open current</a>':'')+'</div><div class="uploadbox"><b>Quotation PDF</b><input type="file" accept="application/pdf" class="fquote"><div class="docstate '+(p.quotation_url?'ok':'missing')+'">'+(p.quotation_url?'Uploaded':'Not uploaded')+'</div>'+(p.quotation_url?'<a target="_blank" href="'+esc(p.quotation_url)+'">Open current</a>':'')+'</div></div><div class="btnrow"><button class="btn primary saveProduct">Save Product</button><button class="btn uploadBrochure">Upload Brochure</button><button class="btn uploadPrice">Upload Price List</button><button class="btn uploadQuote">Upload Quotation</button></div><div class="small result"></div></div>').join('');
+ root.querySelectorAll('.prodrow').forEach(row=>{
+  const key=row.dataset.key, out=row.querySelector('.result');
+  row.querySelector('.saveProduct').onclick=async()=>{out.textContent='Saving…';try{await adminSave(token,{model_key:key,product_name:row.querySelector('.pname').value.trim(),sort_order:Number(row.querySelector('.psort').value||100),active:row.querySelector('.pactive').value==='1'});out.textContent='Saved.';await getCatalog();renderAdminProducts(token)}catch(e){out.textContent=e.message}};
+  row.querySelector('.uploadBrochure').onclick=()=>adminUpload(token,key,'brochure',row.querySelector('.fbrochure').files[0],out);
+  row.querySelector('.uploadPrice').onclick=()=>adminUpload(token,key,'price_list',row.querySelector('.fprice').files[0],out);
+  row.querySelector('.uploadQuote').onclick=()=>adminUpload(token,key,'quotation',row.querySelector('.fquote').files[0],out);
+ });
+}
+
+async function initShareAnalytics(token){
+ const from=document.getElementById('shareFrom'),to=document.getElementById('shareTo');
+ if(!from||!to)return;
+ const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1);
+ from.value=start.toISOString().slice(0,10);to.value=now.toISOString().slice(0,10);
+ document.getElementById('applyShares').onclick=()=>loadShareAnalytics(token);
+ await loadShareAnalytics(token);
+}
+async function loadShareAnalytics(token){
+ const fromEl=document.getElementById('shareFrom'),toEl=document.getElementById('shareTo'),execEl=document.getElementById('shareExec'),branchEl=document.getElementById('shareBranch');
+ let u=API+'?action=share-analytics';
+ if(fromEl?.value)u+='&from='+encodeURIComponent(fromEl.value+'T00:00:00+05:30');
+ if(toEl?.value)u+='&to='+encodeURIComponent(toEl.value+'T23:59:59+05:30');
+ if(execEl?.value)u+='&executive='+encodeURIComponent(execEl.value);
+ if(branchEl?.value)u+='&branch='+encodeURIComponent(branchEl.value);
+ const table=document.getElementById('shareTable'); if(table)table.innerHTML='Loading sharing activity…';
+ try{
+  const r=await fetch(u,{headers:{'x-session-token':token}}),d=await r.json();
+  if(!r.ok)throw new Error(d.error||'Could not load sharing data');
+  const s=d.summary||{};
+  document.getElementById('shareStats').innerHTML=
+   '<div class="stat"><span>WhatsApp Shares</span><b>'+Number(s.total_shares||0)+'</b></div>'+
+   '<div class="stat"><span>Brochures</span><b>'+Number(s.brochures||0)+'</b></div>'+
+   '<div class="stat"><span>Price Lists</span><b>'+Number(s.price_lists||0)+'</b></div>'+
+   '<div class="stat"><span>Quotations</span><b>'+Number(s.quotations||0)+'</b></div>'+
+   '<div class="stat"><span>Unique Customers</span><b>'+Number(s.unique_customers||0)+'</b></div>';
+  if(execEl && execEl.options.length<=1){
+   (d.executives||[]).forEach(x=>{const op=document.createElement('option');op.value=x;op.textContent=x;execEl.appendChild(op)});
+  }
+  const items=d.items||[];
+  if(!items.length){table.innerHTML='<p class="small">No sharing activity found for this filter.</p>';return}
+  table.innerHTML='<div class="tablewrap"><table class="atable"><thead><tr><th>Date & Time</th><th>Executive</th><th>Branch</th><th>Customer</th><th>Phone</th><th>Model</th><th>Brochure</th><th>Price List</th><th>Quotation</th></tr></thead><tbody>'+
+   items.map(x=>'<tr><td>'+new Date(x.created_at).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})+'</td><td>'+esc(x.executive_name)+'</td><td>'+esc(x.branch)+'</td><td><b>'+esc(x.customer_name)+'</b></td><td>+91 '+esc(x.phone)+'</td><td>'+esc(x.model_name)+'</td><td class="'+(x.brochure_shared?'yes':'no')+'">'+(x.brochure_shared?(x.brochure_url_sent?'<a target="_blank" href="'+esc(x.brochure_url_sent)+'">OPEN</a>':'YES'):'—')+'</td><td class="'+(x.price_list_shared?'yes':'no')+'">'+(x.price_list_shared?(x.price_list_url_sent?'<a target="_blank" href="'+esc(x.price_list_url_sent)+'">OPEN</a>':'YES'):'—')+'</td><td class="'+(x.quotation_shared?'yes':'no')+'">'+(x.quotation_shared?(x.quotation_url_sent?'<a target="_blank" href="'+esc(x.quotation_url_sent)+'">OPEN</a>':'YES'):'—')+'</td></tr>').join('')+
+   '</tbody></table></div>';
+ }catch(e){table.innerHTML='<div class="notice">'+esc(e.message||String(e))+'</div>'}
+}
+
+function initBulkPriceUpload(token){
+ const mcBtn=document.getElementById('bulkMcBtn'),scBtn=document.getElementById('bulkScBtn');
+ if(mcBtn)mcBtn.onclick=()=>bulkPriceUpload(token,'motorcycle','bulkMcFile','bulkMcStatus');
+ if(scBtn)scBtn.onclick=()=>bulkPriceUpload(token,'scooter','bulkScFile','bulkScStatus');
+}
+async function bulkPriceUpload(token,type,fileId,statusId){
+ const input=document.getElementById(fileId),status=document.getElementById(statusId);
+ const file=input?.files?.[0];
+ if(!file){alert('Choose the Excel file first.');return}
+ status.textContent='Uploading and updating model-wise price lists…';
+ const fd=new FormData();fd.append('type',type);fd.append('file',file);
+ try{
+   const r=await fetch(API+'?action=bulk-price-upload',{method:'POST',headers:{'x-session-token':token},body:fd});
+   const d=await r.json();
+   if(!r.ok)throw new Error(d.error||'Bulk upload failed');
+   const parts=Object.entries(d.breakdown||{}).map(([k,v])=>k+': '+v+' variant'+(Number(v)===1?'':'s')).join(' • ');
+   status.innerHTML='<span class="ok"><b>Updated successfully.</b></span><br>'+Number(d.models_updated||0)+' models, '+Number(d.rows_updated||0)+' price rows updated.<br>'+esc(parts);
+   await getCatalog();
+   renderAdminProducts(token);
+ }catch(e){status.innerHTML='<span class="missing">'+esc(e.message||String(e))+'</span>'}
+}
+async function adminSave(token,b){
+ const r=await fetch(API+'?action=save-product',{method:'POST',headers:{'content-type':'application/json','x-session-token':token},body:JSON.stringify(b)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Save failed');return d;
+}
+async function adminUpload(token,key,type,file,out){
+ if(!file){alert('Choose a PDF first.');return}out.textContent='Uploading '+file.name+'…';const fd=new FormData();fd.append('model_key',key);fd.append('doc_type',type);fd.append('file',file);try{const r=await fetch(API+'?action=upload',{method:'POST',headers:{'x-session-token':token},body:fd});const d=await r.json();if(!r.ok)throw new Error(d.error||'Upload failed');out.textContent='Uploaded successfully.';await getCatalog();renderAdminProducts(token)}catch(e){out.textContent=e.message||String(e)}
+}
+(async()=>{try{await getCatalog();if(admin){adminLogin();return}if(productKey){const p=productByKey(productKey);if(!p)throw new Error('Product not found');customerProductPage(p);return}main()}catch(e){document.getElementById('app').innerHTML='<div class="notice"><b>Error:</b> '+esc(e.message||String(e))+'</div>'}})();
+</script></body></html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b2a74"><title>Perfect Riders Sales Share</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6fb;color:#101828;font-family:Arial,Helvetica,sans-serif}.w{max-width:980px;margin:auto;padding:14px}.top,.card{background:#fff;border:1px solid #e4e7ec;border-radius:18px;padding:16px;margin-bottom:14px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 8px 26px #1018280d}.brand{display:flex;align-items:center;gap:12px}.logo{background:#0b2a74;color:#fff;width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-weight:800}.top h1{font-size:18px;margin:0}.top p{margin:3px 0 0;color:#667085;font-size:12px}.hero{background:linear-gradient(135deg,#071947,#1548ad);color:#fff;border-radius:22px;padding:24px;margin:14px 0}.hero h2{font-size:29px;line-height:1.1;margin:7px 0}.hero p{opacity:.9;line
 function docsFor(p){return [
  {key:'brochure',label:'Product Brochure',url:p?.brochure_url},
  {key:'price_list',label:'Price List',url:p?.price_list_url},
