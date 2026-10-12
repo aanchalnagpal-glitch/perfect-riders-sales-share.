@@ -76,7 +76,7 @@ function bindSales(){
   const opt=selectedOption();if(opt?.colour)lines.push('Selected Colour: '+opt.colour+(opt.variant?' ('+opt.variant+')':''));
   if(q('sendQuote').checked&&p.quotation_url)lines.push('Quotation: '+quotationUrl());
   if(n && !['no','na','n/a','none','nil'].includes(n.toLowerCase()))lines.push('','Note: '+n);
-  lines.push('','To visit the showroom kindly click on '+SHOWROOM,'','Please feel free to message or call me for finance options or a test ride.\n\nIf I am uncontactable, please call Perfect Riders on 8497016000 for more details.');
+  lines.push('','To visit the showroom kindly click on '+SHOWROOM,'','Please feel free to message or call me for finance options or a test ride.\n\nIf I am uncontactable, please call Perfect Riders on 8497816000 for more details.');
   return lines.join('\n');
  }
  function pre(){q('preview').textContent=msg()||'Enter customer details to preview the WhatsApp message.'}
